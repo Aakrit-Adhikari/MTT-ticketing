@@ -1,5 +1,25 @@
-# Automatic HTTPS (Let's Encrypt) for {$SITE_DOMAIN}. Ports 80/443 must be reachable from the internet.
-{$SITE_DOMAIN} {
+# The proxy is the only container that publishes ports. Everything here is driven by .env (see .env.example):
+#   SITE_ADDRESS : the domain, or the server's IP address when there is no domain yet
+#   TLS_SNIPPET  : tls_auto     (default) real certificate from Let's Encrypt: needs a domain and public ports 80 + 443
+#                  tls_internal self-signed certificate: works for a bare IP address or custom ports (browser warns once)
+#   AUTO_HTTPS   : leave unset normally; "disable_redirects" when HTTPS is published on a custom port
+{
+	auto_https {$AUTO_HTTPS:ignore_loaded_certs}
+	# Browsers send no server name when the address is a bare IP; this tells Caddy which certificate to present.
+	default_sni {$SITE_ADDRESS}
+}
+
+(tls_auto) {
+	tls {
+		protocols tls1.2 tls1.3
+	}
+}
+(tls_internal) {
+	tls internal
+}
+
+{$SITE_ADDRESS} {
+	import {$TLS_SNIPPET:tls_auto}
 	encode zstd gzip
 
 	# API traffic goes straight to the backend so the real client IP reaches the rate limiter (TRUST_PROXY=1).
@@ -14,7 +34,8 @@
 		-Server
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	}
+	# Ticket PDFs are up to 5 MB; the backend enforces the real limits.
 	request_body {
-		max_size 1MB
+		max_size 6MB
 	}
 }

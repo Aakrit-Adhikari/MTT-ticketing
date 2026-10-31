@@ -58,6 +58,11 @@ npx tsc --noEmit        # type check
 Prerequisites: a Linux host with Docker Compose v2, a domain whose DNS points at it, ports 80/443 open. **Do not treat the
 deployment as production-ready until every item in the checklist at the end is true.**
 
+**0. Choose how people will reach the site** (no domain yet? ports 80/443 taken?). See the top of `.env.example`:
+(A) a domain, (B) a free `<ip-with-dashes>.sslip.io` name, or (C) the bare IP with your own ports and a self-signed certificate.
+Ports are set in `.env` (`HTTP_PORT`, `HTTPS_PORT`); only the proxy publishes ports, the frontend (3000), backend (4000) and
+database (5432) are internal to Docker and cannot clash with anything on the server.
+
 **1. Configure secrets**
 ```bash
 cp .env.example .env && chmod 600 .env
