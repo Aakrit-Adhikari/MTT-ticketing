@@ -1,0 +1,186 @@
+:root {
+  --bg: #eceff3; --panel: #fff; --text: #1d2733; --muted: #5b6876; --line: #c9d1d9; --head: #e3e8ee; --zebra: #f6f8fa; --hover: #e8f0f8;
+  --brand: #1565c0; --brand-text: #fff; --danger: #b3261e; --ok: #1b7a3e; --warn: #9a6700;
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; font-size: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #14181d; --panel: #1c2128; --text: #e6ebf0; --muted: #9aa7b4; --line: #333c47; --head: #262d36; --zebra: #1f252d; --hover: #26323f; --brand: #5aa6e8; --brand-text: #0b1620; --danger: #ff8a80; --ok: #6fd08c; --warn: #e3b341; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); }
+a { color: var(--brand); }
+h1 { font-size: 1.25rem; margin: 0 0 .6rem; font-weight: 600; } h2 { font-size: .95rem; margin: 1.1rem 0 .4rem; padding-bottom: 3px; border-bottom: 2px solid var(--line); text-transform: uppercase; letter-spacing: .03em; color: var(--muted); font-weight: 700; }
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 16px 48px; }
+.site-header { background: var(--panel); border-bottom: 1px solid var(--line); margin-bottom: 20px; }
+.site-header .wrap { display: flex; gap: 20px; align-items: center; padding: 12px 16px; flex-wrap: wrap; }
+.site-header .brand { font-weight: 700; font-size: 1.1rem; text-decoration: none; color: var(--text); margin-right: auto; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--brand); border-radius: 0; padding: 10px 14px; margin-bottom: 12px; }
+.notice { border-left: 4px solid var(--warn); background: var(--panel); padding: 10px 14px; margin: 0 0 14px; }
+.error { color: var(--danger); margin: .5rem 0; } .ok { color: var(--ok); }
+label { display: block; font-size: .85rem; color: var(--muted); margin-bottom: 3px; }
+input, select, textarea, button { font: inherit; }
+input, select, textarea { width: 100%; padding: 7px 8px; border: 1px solid var(--line); border-radius: 0; background: var(--panel); color: var(--text); }
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); align-items: end; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+button, .btn { padding: 5px 12px; border-radius: 0; font-weight: 600; font-size: .9rem; border: 1px solid var(--brand); background: var(--brand); color: var(--brand-text); cursor: pointer; text-decoration: none; display: inline-block; }
+button.secondary, .btn.secondary { background: transparent; color: var(--brand); }
+button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+button:disabled { opacity: .55; cursor: not-allowed; }
+table { width: 100%; border-collapse: collapse; background: var(--panel); font-size: .88rem; }
+th, td { border: 1px solid var(--line); padding: 5px 8px; text-align: left; vertical-align: top; }
+th { background: var(--head); font-weight: 600; white-space: nowrap; font-size: .8rem; text-transform: uppercase; letter-spacing: .02em; }
+tbody tr:nth-child(even) td { background: var(--zebra); } tbody tr:hover td { background: var(--hover); }
+.table-scroll { overflow-x: auto; }
+.badge { display: inline-block; padding: 1px 7px; border-radius: 0; border: 1px solid currentColor; font-size: .72rem; font-weight: 700; letter-spacing: .03em; white-space: nowrap; background: var(--panel); }
+.s-INQUIRY, .s-REQUESTED { color: var(--muted); } .s-HELD { color: var(--warn); } .s-CONFIRMED, .s-TICKETED, .s-SCHEDULED { color: var(--ok); }
+.s-CANCELLED, .s-REJECTED, .s-EXPIRED, .s-CLOSED, .s-RELEASED { color: var(--danger); }
+.flight { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.flight:first-of-type { border-top: 0; }
+.muted { color: var(--muted); } .sm { font-size: .85rem; }
+dialog { border: 1px solid var(--line); border-top: 4px solid var(--brand); border-radius: 0; box-shadow: 0 8px 28px rgba(0,0,0,.3); background: var(--panel); color: var(--text); max-width: 440px; padding: 18px; }
+dialog::backdrop { background: rgba(0,0,0,.45); }
+
+/* Admin back office: sidebar + top bar + dense work area, like a desktop business system */
+.admin { display: grid; grid-template-columns: 210px 1fr; min-height: 100vh; }
+.admin nav { background: #1b2a3a; color: #fff; padding: 0 0 12px; border-right: 1px solid #0f1a26; }
+.admin nav .nav-brand { background: #0f1a26; padding: 12px 14px; font-weight: 700; font-size: .95rem; letter-spacing: .02em; border-bottom: 2px solid var(--brand); }
+.admin nav .nav-group { margin-top: 10px; }
+.admin nav .nav-title { padding: 4px 14px; font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: #7f97ad; }
+.admin nav a { display: block; padding: 6px 14px 6px 11px; color: #cfdbe6; text-decoration: none; border-left: 3px solid transparent; }
+.admin nav a:hover { background: #243a50; color: #fff; }
+.admin nav a[aria-current="page"] { background: #2a4560; color: #fff; border-left-color: #5aa6e8; font-weight: 600; }
+.admin-body { display: flex; flex-direction: column; min-width: 0; }
+.topbar { display: flex; align-items: center; gap: 12px; padding: 7px 18px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+.topbar .crumb { font-weight: 700; font-size: 1rem; }
+.topbar .spacer { flex: 1; }
+.topbar .user { font-size: .85rem; color: var(--muted); }
+.topbar button { padding: 3px 10px; }
+.admin main { padding: 14px 18px 40px; min-width: 0; }
+.kpis { display: flex; gap: 0; flex-wrap: wrap; margin-bottom: 12px; border: 1px solid var(--line); background: var(--panel); width: fit-content; max-width: 100%; }
+.kpi { padding: 7px 18px; min-width: 120px; border-right: 1px solid var(--line); font-size: .78rem; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+.kpi:last-child { border-right: 0; }
+.kpi b { display: block; font-size: 1.25rem; color: var(--text); text-transform: none; letter-spacing: 0; }
+.admin table { border: 1px solid var(--line); margin-bottom: 8px; }
+@media (max-width: 720px) { .flight { grid-template-columns: 1fr; } }
+
+@media print {
+  .admin { display: block; } .admin nav, .topbar, .no-print, .site-header { display: none !important; }
+  body { background: #fff; color: #000; } .panel { border: 0; }
+}
+
+/* Dense admin lists */
+table.compact { font-size: .82rem; } table.compact th, table.compact td { padding: 4px 6px; }
+table.compact .badge { font-size: .68rem; padding: 0 5px; display: inline-block; }
+table.compact .badge + .badge { margin-top: 2px; }
+td.narrow, th.narrow { width: 1%; white-space: nowrap; }
+
+/* Airline logos in the admin list */
+.logo-thumb { display: block; width: 56px; height: 36px; object-fit: contain; background: #fff; border: 1px solid var(--line); padding: 2px; }
+label.file-btn { cursor: pointer; font-size: .9rem; }
+
+/* ───────── Round 2: blue buttons (sky blue on hover/press), segmented control, mobile admin ───────── */
+button:hover:not(:disabled), .btn:hover { background: #3d8fd6; border-color: #3d8fd6; color: #fff; }
+button:active:not(:disabled), .btn:active { background: #6bb2e8; border-color: #6bb2e8; color: #fff; }
+button.secondary:hover:not(:disabled), .btn.secondary:hover { background: #e1f0fc; color: var(--brand); border-color: #3d8fd6; }
+button.danger:hover:not(:disabled) { background: #8f1d17; border-color: #8f1d17; color: #fff; }
+@media (prefers-color-scheme: dark) { button.secondary:hover:not(:disabled), .btn.secondary:hover { background: #1f3347; color: #bcdcf7; } }
+.admin .seg { display: inline-flex; background: transparent; border: 1px solid var(--line); border-radius: 0; padding: 0; margin: 0; }
+.admin .seg label { margin: 0; padding: 5px 12px; border-radius: 0; font-size: .85rem; font-weight: 600; color: var(--muted); cursor: pointer; }
+.admin .seg label:has(input:checked) { background: var(--brand); color: var(--brand-text); }
+.menu-btn { display: none; }
+.nav-backdrop { display: none; }
+dialog { width: min(440px, calc(100vw - 24px)); }
+@media (max-width: 900px) {
+  .admin { grid-template-columns: 1fr; }
+  .admin nav { position: fixed; top: 0; bottom: 0; left: 0; width: 250px; z-index: 40; transform: translateX(-100%); transition: transform .2s; overflow-y: auto; display: block; padding: 0 0 12px; }
+  .admin nav.open { transform: none; box-shadow: 4px 0 24px rgba(0,0,0,.35); }
+  .nav-backdrop.open { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 35; }
+  .menu-btn { display: inline-block; padding: 3px 10px; font-size: 1.15rem; line-height: 1.2; }
+  .topbar { padding: 7px 12px; }
+  .topbar .user { display: none; }
+  .admin main { padding: 12px 12px 40px; }
+  .admin main table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .kpi { min-width: 0; flex: 1 1 45%; }
+}
+
+/* Empty admin cells read "null", and delete buttons are red */
+.admin td:empty::after { content: "null"; color: var(--muted); }
+button.danger-text { color: var(--danger); border-color: var(--danger); background: transparent; }
+button.danger-text:hover:not(:disabled) { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+/* Logo */
+.admin nav .nav-brand { padding: 10px 12px; }
+.admin nav .nav-brand img { display: block; width: 100%; height: auto; border-radius: 6px; }
+.login-logo { display: block; width: 100%; max-width: 280px; height: auto; margin: 0 auto 12px; border-radius: 8px; }
+.receipt-logo { display: block; height: 64px; width: auto; margin-bottom: 8px; border-radius: 6px; }
+
+/* ───────── Round 3: one size for every control, one place for action buttons ───────── */
+:root { --ctl-h: 40px; --ctl-h-sm: 30px; }
+input:not([type="checkbox"]):not([type="radio"]), select { height: var(--ctl-h); }
+button, .btn { min-height: var(--ctl-h); padding-block: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px; line-height: 1.2; white-space: nowrap; }
+/* Buttons inside tables, the top bar and dense lists are the smaller size, everywhere */
+table button, table .btn, .topbar button, .kpis button { min-height: var(--ctl-h-sm); padding: 0 10px; font-size: .82rem; }
+/* Buttons that sit next to inputs line up with them, and groups of buttons share one gap */
+.row, .actions { gap: 8px; }
+.row > button, .row > .btn { flex: 0 0 auto; }
+.grid > button, .grid > .btn { align-self: end; width: 100%; }
+.stack { display: grid; gap: 10px; }
+
+/* Action columns: always the last column, always right-aligned, never wrapping, same button order */
+th.col-actions, td.col-actions { width: 1%; white-space: nowrap; text-align: right; }
+td:has(> button), td:has(> .row), td:has(> .actions) { width: 1%; white-space: nowrap; text-align: right; }
+td.row { display: table-cell; }
+td .row, td .actions, .actions { display: inline-flex; flex-wrap: nowrap; justify-content: flex-end; align-items: center; gap: 8px; }
+td.col-actions .actions, td .actions { vertical-align: middle; }
+th, td { vertical-align: middle; }
+td.mono, .mono { font-family: ui-monospace, Consolas, monospace; letter-spacing: .04em; }
+
+/* Passenger blocks (public inquiry form and staff new-booking form) */
+.pax-block { border: 1px solid var(--line); border-radius: 0; padding: 10px 12px 12px; margin: 0 0 12px; min-width: 0; }
+.pax-block legend { padding: 0 6px; font-weight: 700; font-size: .85rem; color: var(--muted); }
+.pax-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.admin-pax { padding-top: 10px; border-top: 1px dashed var(--line); }
+.admin-pax:first-of-type { border-top: 0; }
+.form-sub { margin: 16px 0 8px; font-size: .95rem; }
+dialog .stack label { margin-bottom: 3px; }
+
+/* Form rhythm: whatever follows a field grid gets the same gap; staff passenger rows are a tidy 4-column grid */
+.grid + *:not(.grid) { margin-top: 12px; }
+@media (min-width: 900px) { .admin-pax { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+td > button:not(:first-child), td > .btn:not(:first-child) { margin-left: 8px; }
+.row.sm button, .row.sm .btn { min-height: var(--ctl-h-sm); padding: 0 12px; font-size: .85rem; }
+
+/* ───────── Round 4: dialogs read left-to-right, black headings, clear detail sections ───────── */
+dialog { text-align: left; }
+dialog .row, dialog .actions { text-align: left; }
+:root { --heading: #0b1118; --label: #2b3540; }
+@media (prefers-color-scheme: dark) { :root { --heading: #f4f7fa; --label: #c9d3dd; } }
+h1, h2, h3, th, .crumb { color: var(--heading); }
+h2 { color: var(--heading); border-bottom-color: var(--heading); }
+label { color: var(--label); }
+th { color: var(--heading); font-weight: 700; }
+.kpi b, .panel > b:first-child { color: var(--heading); }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.card { margin: 0; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.card-title { margin: 0 0 8px; font-size: 1rem; font-weight: 700; color: var(--heading); }
+.card-head .card-title { margin: 0; }
+dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
+dl.facts dt { color: var(--heading); font-weight: 600; }
+dl.facts dd { margin: 0; overflow-wrap: anywhere; }
+button.linklike { background: none; border: 0; min-height: 0; padding: 0; color: var(--brand); text-decoration: underline; font-weight: 600; font-size: inherit; cursor: pointer; }
+button.linklike:hover:not(:disabled) { background: none; color: var(--brand); text-decoration: none; }
+label.check { display: flex; gap: 8px; align-items: center; margin: 10px 0 0; font-size: .85rem; color: var(--label); }
+label.check input { width: auto; height: auto; min-height: 0; margin: 0; }
+.tab-hint { min-height: 2.6em; }
+.pax-grid { align-items: start; }
+.pax-grid > button { align-self: end; }
+/* A dialog opened from inside a table cell must not inherit the cell's right-aligned, no-wrap action styling */
+dialog { white-space: normal; }
+dialog .row { display: flex; justify-content: flex-end; }
+
+/* The main booking actions keep one size, so Hold seats and Release seats swap in place without the row shifting */
+.action-bar > button { min-width: 150px; }

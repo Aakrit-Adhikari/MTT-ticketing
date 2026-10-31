@@ -1,0 +1,133 @@
+# Production-oriented stack. Only the reverse proxy publishes ports; PostgreSQL and the backend are reachable
+# solely over the private "internal" network. Secrets come from .env (never committed).
+name: mtt
+
+services:
+  db:
+    image: postgres:17.6-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_SUPERUSER}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD}
+      MIGRATOR_DB_PASSWORD: ${MIGRATOR_DB_PASSWORD}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/db/roles.sql:/roles.sql:ro
+      - ./infra/db/init-roles.sh:/docker-entrypoint-initdb.d/01-init-roles.sh:ro
+    networks: [internal]
+    # No "ports:" on purpose: PostgreSQL is not published to the host or the internet.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_SUPERUSER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    stop_grace_period: 30s
+
+  # One-shot, run explicitly:  docker compose --profile ops run --rm migrate
+  migrate:
+    profiles: ["ops"]
+    build: { context: ./backend, target: migrate }
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql://mtt_migrator:${MIGRATOR_DB_PASSWORD}@db:5432/${POSTGRES_DB}
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [internal]
+
+  # One-shot, run explicitly:  docker compose --profile ops run --rm create-admin
+  # Creates the first Super Admin from ADMIN_EMAIL / ADMIN_NAME / ADMIN_PASSWORD in .env. Safe to run again (it does nothing
+  # once a Super Admin exists). Remove ADMIN_PASSWORD from .env afterwards.
+  create-admin:
+    profiles: ["ops"]
+    build: { context: ./backend, target: runtime }
+    restart: "no"
+    command: ["node", "dist/scripts/create-admin.js"]
+    environment:
+      DATABASE_URL: postgresql://mtt_app:${APP_DB_PASSWORD}@db:5432/${POSTGRES_DB}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_NAME: ${ADMIN_NAME:-Administrator}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [internal]
+
+  backend:
+    build: { context: ./backend, target: runtime }
+    restart: unless-stopped
+    # Explicit allow-list: the backend never receives the superuser or migrator passwords.
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      DATABASE_URL: postgresql://mtt_app:${APP_DB_PASSWORD}@db:5432/${POSTGRES_DB}
+      TRUST_PROXY: "1"
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-mtt-api}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-mtt-admin}
+      ACCESS_TTL_SECONDS: ${ACCESS_TTL_SECONDS:-900}
+      REFRESH_TTL_DAYS: ${REFRESH_TTL_DAYS:-7}
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
+      HOLD_DEFAULT_MINUTES: ${HOLD_DEFAULT_MINUTES:-120}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM}
+      STAFF_NOTIFY_EMAIL: ${STAFF_NOTIFY_EMAIL}
+      AGENCY_NAME: ${AGENCY_NAME:-Mountain Tours and Travels Ticketing}
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [internal]
+    expose: ["4000"]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      target: runtime
+      args:
+        BACKEND_INTERNAL_URL: http://backend:4000
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    depends_on:
+      backend: { condition: service_healthy }
+    networks: [internal]
+    expose: ["3000"]
+    read_only: true
+    tmpfs: [/tmp, /app/.next/cache]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+  proxy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [frontend, backend]
+    networks: [internal, edge]
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+
+networks:
+  internal: {}  # outbound access is needed for Let's Encrypt and future email; no ports are published except the proxy's
+  edge: {}
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

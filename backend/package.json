@@ -1,0 +1,62 @@
+{
+  "name": "mtt-backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "prisma generate && tsc -p tsconfig.build.json",
+    "start:prod": "node dist/main.js",
+    "start:dev": "ts-node-dev --respawn --transpile-only src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:int": "jest --config jest.int.config.js --runInBand",
+    "migrate:deploy": "prisma migrate deploy",
+    "admin:create": "node dist/scripts/create-admin.js",
+    "mail:test": "node dist/scripts/mail-test.js"
+  },
+  "dependencies": {
+    "@nestjs/common": "11.2.8",
+    "@nestjs/core": "11.2.8",
+    "@nestjs/jwt": "11.0.2",
+    "@nestjs/platform-express": "11.2.8",
+    "@nestjs/terminus": "11.1.1",
+    "@nestjs/throttler": "6.7.1",
+    "@prisma/client": "6.19.3",
+    "argon2": "0.45.1",
+    "class-transformer": "0.5.1",
+    "class-validator": "0.15.1",
+    "cookie-parser": "1.4.7",
+    "helmet": "8.3.0",
+    "nodemailer": "10.2.1",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "11.2.8",
+    "@types/cookie-parser": "1.4.10",
+    "@types/express": "5.0.6",
+    "@types/jest": "29.5.14",
+    "@types/node": "22.20.5",
+    "@types/nodemailer": "8.0.2",
+    "@types/smtp-server": "3.5.13",
+    "@types/supertest": "7.2.1",
+    "embedded-postgres": "18.4.0-beta.17",
+    "jest": "29.7.0",
+    "prisma": "6.19.3",
+    "smtp-server": "3.21.1",
+    "supertest": "7.3.1",
+    "ts-jest": "29.4.15",
+    "ts-node": "10.9.2",
+    "ts-node-dev": "2.0.0",
+    "typescript": "5.9.3"
+  },
+  "allowScripts": {
+    "argon2@0.45.1": true,
+    "@prisma/engines@6.19.3": true,
+    "@embedded-postgres/windows-x64@18.4.0-beta.17": true
+  },
+  "overrides": {
+    "multer": "2.5.0",
+    "deepmerge-ts": "8.0.0"
+  }
+}

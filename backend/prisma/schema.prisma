@@ -1,0 +1,428 @@
+// Data classification (see docs/SECURITY.md):
+//  - Credentials:  User.passwordHash (Argon2id), RefreshToken.tokenHash (SHA-256 of a 256-bit random value)
+//  - Sensitive PII: Passenger.documentNumberEnc / documentExpiryEnc / nationalityEnc (AES-256-GCM, app-level), contact email/phone, DOB
+//  - Operational:   flights, inventory, booking status
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  BOOKING_STAFF
+  FINANCE_STAFF
+}
+
+enum FlightStatus {
+  SCHEDULED
+  CLOSED // no longer bookable (e.g. departed or sales stopped)
+  CANCELLED
+}
+
+enum TripType {
+  ONE_WAY
+  ROUND_TRIP
+}
+
+// Where a booking came from. An inquiry only becomes a "booking" when staff confirm it (confirmedAt is set).
+enum BookingSource {
+  WEBSITE
+  STAFF
+}
+
+enum BookingStatus {
+  INQUIRY // customer submitted; NOTHING reserved
+  HELD // staff placed a temporary, expiring hold on seats
+  CONFIRMED // staff confirmed with the airline and committed inventory
+  TICKETED // tickets issued (later phase)
+  CANCELLED
+  EXPIRED // hold lapsed
+  REJECTED
+}
+
+enum SegmentDirection {
+  OUTBOUND
+  RETURN
+}
+
+// Which inventory counter this segment's seats currently sit in.
+enum SeatState {
+  REQUESTED // counts in no counter
+  HELD // inventory.held
+  CONFIRMED // inventory.confirmed
+  TICKETED // inventory.ticketed
+  RELEASED // counts in no counter
+}
+
+enum PassengerType {
+  ADULT
+  CHILD
+  INFANT // infants travel on a lap and do not consume a seat
+}
+
+model User {
+  id            String   @id @default(uuid()) @db.Uuid
+  email         String   @unique
+  name          String
+  passwordHash  String
+  role          Role
+  isActive      Boolean  @default(true)
+  failedLogins  Int      @default(0)
+  lockedUntil   DateTime?
+  tokenVersion  Int      @default(0) // bump to invalidate every outstanding access token
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  refreshTokens RefreshToken[]
+  adjustments   InventoryAdjustment[]
+  auditLogs     AuditLog[]
+  payments      Payment[]
+  reschedules   Reschedule[]
+}
+
+model RefreshToken {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @db.Uuid
+  familyId     String    @db.Uuid // all rotations of one login share a family
+  tokenHash    String    @unique
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  usedAt       DateTime? // set when rotated; presenting it again = reuse = theft signal
+  createdAt    DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+}
+
+model Airline {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique // IATA 2-letter, e.g. RA
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  // Logo image (<= 1 MiB) kept in the database so backups include it and no file volume is needed.
+  logoData      Bytes?
+  logoMime      String?
+  logoUpdatedAt DateTime?
+
+  flights Flight[]
+}
+
+model Airport {
+  id      String @id @default(uuid()) @db.Uuid
+  iata    String @unique // KTM, PKR
+  name    String
+  city    String
+  country String @default("NP")
+
+  departures Flight[] @relation("Origin")
+  arrivals   Flight[] @relation("Destination")
+}
+
+model Flight {
+  id            String       @id @default(uuid()) @db.Uuid
+  airlineId     String       @db.Uuid
+  flightNumber  String
+  // A normal flight has origin + destination + arrival. A "sector" flight (e.g. a mountain flight that returns to where it
+  // started) has only a sector and a departure time. The flight_kind CHECK in the migration enforces one or the other.
+  originId      String?      @db.Uuid
+  destinationId String?      @db.Uuid
+  sectorId      String?      @db.Uuid
+  departureAt   DateTime
+  arrivalAt     DateTime?
+  adultFare     Decimal      @db.Decimal(12, 2)
+  childFare     Decimal      @db.Decimal(12, 2)
+  currency      String       @default("NPR")
+  status        FlightStatus @default(SCHEDULED)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  airline     Airline  @relation(fields: [airlineId], references: [id])
+  origin      Airport? @relation("Origin", fields: [originId], references: [id])
+  destination Airport? @relation("Destination", fields: [destinationId], references: [id])
+  sector      Sector?  @relation(fields: [sectorId], references: [id])
+  inventory   FlightInventory?
+  adjustments InventoryAdjustment[]
+  segments    BookingSegment[]
+
+  @@unique([airlineId, flightNumber, departureAt])
+  @@index([originId, destinationId, departureAt])
+  @@index([sectorId, departureAt])
+}
+
+// A named, round-the-same-place offering (mountain flight, scenic flight...). One input field: the name.
+model Sector {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  flights Flight[]
+}
+
+// Inventory policy (docs/INVENTORY.md):
+//   available = total - held - confirmed - ticketed
+// A seat lives in exactly one counter at a time, so it is never counted twice.
+// Cancelled/released seats simply leave their counter and become available again.
+// DB CHECK constraints (see migration) guarantee the counters can never go negative or exceed total.
+model FlightInventory {
+  flightId  String   @id @db.Uuid
+  total     Int
+  held      Int      @default(0)
+  confirmed Int      @default(0)
+  ticketed  Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  flight Flight @relation(fields: [flightId], references: [id], onDelete: Cascade)
+}
+
+// Append-only ledger of manual changes to `total`.
+model InventoryAdjustment {
+  id          String   @id @default(uuid()) @db.Uuid
+  flightId    String   @db.Uuid
+  adminId     String   @db.Uuid
+  delta       Int
+  totalBefore Int
+  totalAfter  Int
+  reason      String
+  createdAt   DateTime @default(now())
+
+  flight Flight @relation(fields: [flightId], references: [id])
+  admin  User   @relation(fields: [adminId], references: [id])
+
+  @@index([flightId])
+}
+
+model Booking {
+  id           String        @id @default(uuid()) @db.Uuid
+  reference    String        @unique
+  status       BookingStatus @default(INQUIRY)
+  tripType     TripType
+  contactName  String
+  contactEmail String
+  contactPhone String
+  notes        String?
+  holdExpiresAt DateTime?
+  pnr          String? // airline reservation code, typed in by staff from the airline's confirmation
+  source       BookingSource @default(WEBSITE)
+  confirmedAt  DateTime? // set when staff confirm; null = still just an inquiry
+  rescheduledCount Int       @default(0) // >0 means this booking was moved to another flight after it was made
+  requestedDate       DateTime? @db.Date // the day the customer said they want to fly (they may be moved to a nearby flight)
+  requestedReturnDate DateTime? @db.Date
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  segments      BookingSegment[]
+  passengers    Passenger[]
+  notifications Notification[]
+  changeRequests ChangeRequest[]
+  payments      Payment[]
+  reschedules   Reschedule[]
+  ticketFiles   TicketFile[]
+
+  @@index([status])
+  @@index([confirmedAt])
+  @@index([contactEmail])
+  @@index([holdExpiresAt])
+}
+
+model BookingSegment {
+  id        String           @id @default(uuid()) @db.Uuid
+  bookingId String           @db.Uuid
+  flightId  String           @db.Uuid
+  direction SegmentDirection
+  seats     Int // seat-consuming passengers (adults + children)
+  seatState SeatState        @default(REQUESTED)
+  originalFlightId String?   @db.Uuid // set the first time the booking is rescheduled: keeps the original itinerary on record
+  // Set when staff adjust the time of THIS ticket on the same flight (e.g. a delay). null = the flight's own departure time.
+  actualDepartureAt DateTime?
+  // Fares are snapshotted so later fare edits never rewrite history.
+  adultFare Decimal          @db.Decimal(12, 2)
+  childFare Decimal          @db.Decimal(12, 2)
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  flight  Flight  @relation(fields: [flightId], references: [id])
+
+  @@unique([bookingId, direction])
+  @@index([flightId, seatState])
+}
+
+model Passenger {
+  id                 String        @id @default(uuid()) @db.Uuid
+  bookingId          String        @db.Uuid
+  type               PassengerType
+  firstName          String
+  lastName           String
+  dateOfBirth        DateTime?     @db.Date
+  // Passport details. All three are AES-256-GCM envelopes (FIELD_ENCRYPTION_KEY); plaintext is never stored or logged.
+  documentNumberEnc  String?
+  documentExpiryEnc  String? // YYYY-MM-DD
+  nationalityEnc     String?
+  ticketNumber       String? // typed in by staff from the airline's issued ticket
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @db.Uuid
+  action     String
+  entityType String
+  entityId   String
+  detail     Json?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  NOT_CONFIGURED // no SMTP server set up; nothing left the building
+}
+
+// Record of every customer email (no body stored; the template name says what was sent).
+model Notification {
+  id        String             @id @default(uuid()) @db.Uuid
+  bookingId String?            @db.Uuid
+  toEmail   String
+  template  String
+  subject   String
+  status    NotificationStatus @default(PENDING)
+  error     String?
+  createdAt DateTime           @default(now())
+  sentAt    DateTime?
+
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@index([bookingId])
+  @@index([createdAt])
+}
+
+enum ChangeRequestType {
+  CANCEL_REFUND
+  RESCHEDULE
+}
+
+enum ChangeRequestStatus {
+  OPEN
+  DONE
+  REJECTED
+}
+
+// A customer asks; staff decide. The customer never states an amount: refunds depend on the airline's rules.
+model ChangeRequest {
+  id            String              @id @default(uuid()) @db.Uuid
+  bookingId     String              @db.Uuid
+  type          ChangeRequestType
+  status        ChangeRequestStatus @default(OPEN)
+  message       String
+  preferredDate String? // reschedule: the date the customer would like (free text, validated as YYYY-MM-DD)
+  staffNote     String? // staff reply; this is emailed to the customer
+  refundAmount  Decimal?            @db.Decimal(12, 2) // decided and recorded by staff
+  resolvedById  String?             @db.Uuid
+  resolvedAt    DateTime?
+  createdAt     DateTime            @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@index([status, createdAt])
+}
+
+enum PaymentType {
+  PAYMENT // money received from the customer
+  REFUND // money given back to the customer
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  ESEWA
+  KHALTI
+  CARD_POS
+  OTHER
+}
+
+enum PaymentStatus {
+  RECORDED
+  VOIDED // entered by mistake: kept for the record, excluded from every total
+}
+
+// Manually recorded money movements. Nothing here is ever created automatically or by a customer.
+// Rows are never deleted or edited; a mistake is VOIDED with a reason.
+model Payment {
+  id             String        @id @default(uuid()) @db.Uuid
+  bookingId      String        @db.Uuid
+  type           PaymentType   @default(PAYMENT)
+  method         PaymentMethod
+  amount         Decimal       @db.Decimal(12, 2)
+  reference      String? // bank / eSewa / Khalti transaction id, cheque no. etc.
+  receivedAt     DateTime
+  receiptNumber  String        @unique
+  note           String?
+  status         PaymentStatus @default(RECORDED)
+  idempotencyKey String?       @unique // makes a double-click / retry harmless
+  recordedById   String        @db.Uuid
+  voidedById     String?       @db.Uuid
+  voidedAt       DateTime?
+  voidReason     String?
+  createdAt      DateTime      @default(now())
+
+  booking    Booking @relation(fields: [bookingId], references: [id])
+  recordedBy User    @relation(fields: [recordedById], references: [id])
+
+  @@index([bookingId])
+  @@index([receivedAt])
+}
+
+// One row per leg moved by a reschedule. The flight details are copied in (not just referenced) so the history still reads
+// correctly if a flight is later edited or removed.
+model Reschedule {
+  id                String           @id @default(uuid()) @db.Uuid
+  bookingId         String           @db.Uuid
+  direction         SegmentDirection
+  fromFlightNumber  String
+  fromDepartureAt   DateTime
+  toFlightNumber    String
+  toDepartureAt     DateTime
+  note              String?
+  doneById          String?          @db.Uuid
+  createdAt         DateTime         @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  doneBy  User?   @relation(fields: [doneById], references: [id])
+
+  @@index([bookingId])
+  @@index([createdAt])
+}
+
+// The airline's own ticket PDF, kept in the database so backups include it. Optional: staff upload it after ticketing.
+model TicketFile {
+  id             String   @id @default(uuid()) @db.Uuid
+  bookingId      String   @db.Uuid
+  filename       String
+  size           Int
+  data           Bytes
+  uploadedByName String
+  createdAt      DateTime @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+}
