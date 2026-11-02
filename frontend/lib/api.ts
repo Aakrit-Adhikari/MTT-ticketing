@@ -75,6 +75,16 @@ export const adminUpload = <T,>(path: string, file: File) => adminApi<T>(path, '
 /** For file downloads, which cannot go through adminApi. Call adminApi first so an expired token is refreshed. */
 export const currentToken = (): string | null => accessToken;
 
+/** Public download (the customer proves who they are with reference + email in the body). */
+export async function downloadPublicFile(path: string, body: unknown, filename: string): Promise<void> {
+  const res = await fetch(`/api${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'mtt-admin' }, body: JSON.stringify(body), cache: 'no-store' });
+  if (!res.ok) throw new ApiError(res.status, messageOf(await res.json().catch(() => null), 'The file could not be downloaded.'));
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
 /** Downloads a file that needs the sign-in token (it cannot be a plain link) and hands it to the browser. */
 export async function downloadFile(path: string, filename: string): Promise<void> {
   await adminApi('/auth/me'); // refreshes an expired token first

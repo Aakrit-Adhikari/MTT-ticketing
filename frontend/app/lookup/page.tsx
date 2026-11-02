@@ -2,7 +2,7 @@
 import { FormEvent, useState } from 'react';
 import SiteShell from '@/components/SiteShell';
 import { Field } from '@/components/ui';
-import { publicApi } from '@/lib/api';
+import { downloadPublicFile, publicApi } from '@/lib/api';
 import { dirLabel, fmtDateTime, routeWords } from '@/lib/format';
 
 interface Result {
@@ -10,6 +10,7 @@ interface Result {
   rescheduled: boolean; payment: string | null; requests: { type: 'CANCEL_REFUND' | 'RESCHEDULE'; status: 'OPEN' | 'DONE' | 'REJECTED'; createdAt: string }[];
   segments: { direction: string; airline: { name: string }; flightNumber: string; origin: { city: string; iata: string } | null; destination: { city: string; iata: string } | null; sector: { name: string } | null; departureAt: string }[];
   passengers: { type: string; firstName: string; lastName: string; ticketNumber: string | null }[];
+  ticketFiles?: { id: string; filename: string; size: number }[];
 }
 
 const MEANING: Record<string, { label: string; text: string; cls: string }> = {
@@ -77,6 +78,16 @@ export default function LookupPage() {
               </tbody>
             </table>
           </div>
+          {r.status === 'TICKETED' && (r.ticketFiles?.length ?? 0) > 0 && (
+            <>
+              <h2>Your ticket</h2>
+              <div className="row">
+                {r.ticketFiles!.map((t) => (
+                  <button key={t.id} className="secondary" onClick={async () => { setErr(''); try { await downloadPublicFile('/public/bookings/ticket-file', { ...f, fileId: t.id }, t.filename); } catch (x) { setErr((x as Error).message); } }}>Download {t.filename}</button>
+                ))}
+              </div>
+            </>
+          )}
           <h2>Passengers ({r.passengers.length})</h2>
           <table>
             <thead><tr><th>Name</th><th>Type</th>{r.status === 'TICKETED' && <th>Ticket number</th>}</tr></thead>

@@ -395,6 +395,40 @@ describe('API (integration, real PostgreSQL)', () => {
       expect((await http.delete(`${url}/${ok.body.id}`).set(auth(staff))).status).toBe(204);
     });
 
+    it('counts new website inquiries and open requests for the sidebar red dots', async () => {
+      const before = new Date(Date.now() - 1000).toISOString();
+      const { id } = await mkFlight({ seats: 3, number: 'RA 775', dep: departure(104, 6) });
+      await inquire(id, 1);
+      const r = await http.get('/api/admin/badges').query({ inquiriesSince: before, requestsSince: before }).set(auth(staff));
+      expect(r.status).toBe(200);
+      expect(r.body.inquiries).toBeGreaterThanOrEqual(1);
+      const later = await http.get('/api/admin/badges').query({ inquiriesSince: new Date(Date.now() + 60_000).toISOString() }).set(auth(staff));
+      expect(later.body.inquiries).toBe(0); // opening the page moves "seen" forward, which clears the dot
+      expect((await http.get('/api/admin/badges').set(auth(finance))).status).toBe(403);
+    });
+
+    it('lets the customer download their own ticket PDF once ticketed, and nobody else', async () => {
+      const { id } = await mkFlight({ seats: 3, number: 'RA 774', dep: departure(103, 6) });
+      const a = await inquire(id, 1);
+      const ref = a.body.reference as string;
+      const b = await prisma.booking.findUniqueOrThrow({ where: { reference: ref } });
+      await http.post(`/api/admin/bookings/${b.id}/confirm`).set(auth(staff));
+      const up = await http.post(`/api/admin/bookings/${b.id}/ticket-files?filename=mine.pdf`).set(auth(staff)).set('Content-Type', 'application/pdf').send(Buffer.from('%PDF-1.4 customer copy'));
+      const who = { reference: ref, email: 'sita@example.com' };
+      expect((await http.post('/api/public/bookings/ticket-file').send({ ...who, fileId: up.body.id })).status).toBe(404); // not ticketed yet
+      const pax = await prisma.passenger.findMany({ where: { bookingId: b.id } });
+      await http.post(`/api/admin/bookings/${b.id}/ticket`).set(auth(staff)).send({ pnr: 'QWE123', tickets: pax.map((x, i) => ({ passengerId: x.id, ticketNumber: `5551234567${i}` })) });
+      const look = await http.post('/api/public/bookings/lookup').send(who);
+      expect(look.body.ticketFiles).toEqual([expect.objectContaining({ id: up.body.id, filename: 'mine.pdf' })]);
+      const dl = await http.post('/api/public/bookings/ticket-file').send({ ...who, fileId: up.body.id });
+      expect(dl.status).toBe(200);
+      expect(dl.headers['content-type']).toContain('application/pdf');
+      expect((await http.post('/api/public/bookings/ticket-file').send({ ...who, email: 'other@example.com', fileId: up.body.id })).status).toBe(404);
+      // the ticket email carries the PDF
+      const sent = await prisma.notification.findFirst({ where: { bookingId: b.id, template: 'ticket_issued' } });
+      expect(sent).not.toBeNull();
+    });
+
   });
 
   describe('releasing a hold', () => {
@@ -478,10 +512,15 @@ describe('API (integration, real PostgreSQL)', () => {
       expect(one.body.outbound.map((f: { flightNumber: string }) => f.flightNumber).sort()).toEqual(['RA 201', 'RA 202']);
 
       const three = await http.get('/api/public/flights/search').query({ ...q, adults: 2, children: 1 });
-      expect(three.body.outbound.map((f: { flightNumber: string }) => f.flightNumber)).toEqual(['RA 201']);
-      expect(three.body.outbound[0].estimatedTotal).toBe('15200.00'); // 2×5500 + 1×4200
-      expect(three.body.outbound[0].id).toBe(plenty.id);
-      expect(three.body.outbound[0].seatsAvailable).toBeGreaterThanOrEqual(3); // real seats left are shown
+      // a flight with too few seats is still listed (flagged), so the site can say "only 2 remaining"
+      const byNo3 = Object.fromEntries(three.body.outbound.map((f: { flightNumber: string }) => [f.flightNumber, f]));
+      expect(Object.keys(byNo3).sort()).toEqual(['RA 201', 'RA 202']);
+      expect(byNo3['RA 201'].estimatedTotal).toBe('15200.00'); // 2×5500 + 1×4200
+      expect(byNo3['RA 201'].id).toBe(plenty.id);
+      expect(byNo3['RA 201'].fitsParty).toBe(true);
+      expect(byNo3['RA 202'].fitsParty).toBe(false);
+      expect(byNo3['RA 202'].seatsAvailable).toBe(2);
+      expect(one.body.outbound.every((f: { fitsParty: boolean }) => f.fitsParty)).toBe(true);
     });
 
     it('without a date lists every upcoming departure on the route with the real seats left', async () => {

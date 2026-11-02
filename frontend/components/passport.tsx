@@ -37,7 +37,8 @@ function NationalityField({ value, onChange, required }: { value: string; onChan
  * Optional as a group: once the number or nationality is filled in, both are required (the server enforces the same rule).
  */
 export function PassportFields({ value, onChange, required, showExpiry = true }: { value: PassportValue; onChange: (v: PassportValue) => void; required?: boolean; showExpiry?: boolean }) {
-  const any = required || !!(value.documentNumber || value.nationality.trim() || value.documentExpiry);
+  // Only a typed number (or expiry) makes the group mandatory; a nationality picked alone is simply ignored (see passportPayload).
+  const any = required || !!(value.documentNumber || value.documentExpiry);
   const set = (k: keyof PassportValue, v: string) => onChange({ ...value, [k]: v });
   return (
     <>

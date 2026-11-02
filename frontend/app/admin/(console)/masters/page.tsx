@@ -101,7 +101,7 @@ export default function Masters() {
           <Field label="IATA code"><input required pattern="[A-Z0-9]{2,3}" maxLength={3} value={al.code} onChange={(e) => setAl({ ...al, code: e.target.value.toUpperCase() })} /></Field>
           <Field label="Name"><input required maxLength={100} value={al.name} onChange={(e) => setAl({ ...al, name: e.target.value })} /></Field>
           <Field label="Logo (optional, image under 1 MB)"><input key={fileKey} type="file" accept="image/*" onChange={pickNew} /></Field>
-          <button>Add airline</button>
+          <button className="add-btn">Add airline</button>
         </form>
       )}
       <table><thead><tr><th>Logo</th><th>Code</th><th>Name</th><th>Active</th><th></th></tr></thead>
@@ -133,7 +133,7 @@ export default function Masters() {
           <Field label="IATA"><input required pattern="[A-Z]{3}" maxLength={3} value={ap.iata} onChange={(e) => setAp({ ...ap, iata: e.target.value.toUpperCase() })} /></Field>
           <Field label="Airport name"><input required maxLength={100} value={ap.name} onChange={(e) => setAp({ ...ap, name: e.target.value })} /></Field>
           <Field label="City"><input required maxLength={100} value={ap.city} onChange={(e) => setAp({ ...ap, city: e.target.value })} /></Field>
-          <button>Add airport</button>
+          <button className="add-btn">Add airport</button>
         </form>
       )}
       <table><thead><tr><th>IATA</th><th>Name</th><th>City</th><th></th></tr></thead>
@@ -144,7 +144,7 @@ export default function Masters() {
       {user?.role !== 'FINANCE_STAFF' && (
         <form className="panel grid" onSubmit={addSector}>
           <Field label="Sector name"><input required minLength={2} maxLength={100} placeholder="e.g. Everest Mountain Flight" value={sectorName} onChange={(e) => setSectorName(e.target.value)} /></Field>
-          <button>Add sector</button>
+          <button className="add-btn">Add sector</button>
         </form>
       )}
       <table><thead><tr><th>Name</th><th>Active</th><th></th></tr></thead>

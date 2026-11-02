@@ -8,7 +8,7 @@ import { BookingsRepository } from './bookings.repository';
 import { ChangeRequestsService } from './change-requests.service';
 import { ReschedulingService } from './rescheduling.service';
 import { BookingsService } from './bookings.service';
-import { AdminBookingQuery, CustomerQuery, CreateInquiryDto, CreateRequestDto, HoldDto, IssueTicketDto, LookupDto, ReasonDto, RescheduleDto, ResolveRequestDto, UpdateBookingDatesDto, UpdatePassportDto, MonthQuery, SimpleListQuery, FileNameQuery } from './dto/booking.dto';
+import { AdminBookingQuery, CustomerQuery, CreateInquiryDto, CreateRequestDto, HoldDto, IssueTicketDto, LookupDto, PublicTicketFileDto, ReasonDto, RescheduleDto, ResolveRequestDto, UpdateBookingDatesDto, UpdatePassportDto, MonthQuery, SimpleListQuery, FileNameQuery } from './dto/booking.dto';
 
 @Controller()
 export class BookingsController {
@@ -34,10 +34,26 @@ export class BookingsController {
   }
 
   @Public()
+  @Post('public/bookings/ticket-file')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  async publicTicketFile(@Body() dto: PublicTicketFileDto, @Res() res: Response) {
+    const f = await this.bookings.publicTicketFile(dto.reference, dto.email, dto.fileId);
+    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${f.filename}"`, 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store' });
+    res.send(f.data);
+  }
+
+  @Public()
   @Post('public/bookings/request')
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   request(@Body() dto: CreateRequestDto) {
     return this.requests.create(dto);
+  }
+
+  @Get('admin/badges')
+  @Roles(Role.BOOKING_STAFF)
+  badges(@Query('inquiriesSince') inquiriesSince?: string, @Query('requestsSince') requestsSince?: string) {
+    return this.bookings.badges(inquiriesSince, requestsSince);
   }
 
   @Get('admin/requests')

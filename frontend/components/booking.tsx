@@ -9,7 +9,7 @@ export interface Airport { iata: string; city: string; name: string }
 export interface Flight {
   id: string; flightNumber: string; airline: { code: string; name: string; logoUrl: string | null };
   origin: Airport | null; destination: Airport | null; sector: { id: string; name: string } | null; departureAt: string; arrivalAt: string | null;
-  adultFare: string; childFare: string; currency: string; estimatedTotal: string; seatsAvailable: number;
+  adultFare: string; childFare: string; currency: string; estimatedTotal: string; seatsAvailable: number; fitsParty?: boolean;
 }
 export interface Results { outbound: Flight[]; return: Flight[] }
 interface Pax extends PassportValue { type: 'ADULT' | 'CHILD' | 'INFANT'; firstName: string; lastName: string }
@@ -48,8 +48,8 @@ export function FlightList({ title, flights, chosen, onPick, people }: { title: 
         <div key={d.key}>
           <div className="day-head">{fmtDay(d.at)}</div>
           {d.items.map((f) => (
-            <label key={f.id} className={`fcard${chosen?.id === f.id ? ' picked' : ''}`}>
-              <input type="radio" name={title} checked={chosen?.id === f.id} onChange={() => onPick(f)} />
+            <label key={f.id} className={`fcard${chosen?.id === f.id ? ' picked' : ''}${f.fitsParty === false ? ' short' : ''}`}>
+              <input type="radio" name={title} checked={chosen?.id === f.id} disabled={f.fitsParty === false} onChange={() => onPick(f)} />
               <div className="al">
                 <AirlineMark airline={f.airline} />
                 <div><b>{f.airline.name}</b><small>{f.flightNumber}</small></div>
@@ -72,7 +72,7 @@ export function FlightList({ title, flights, chosen, onPick, people }: { title: 
                   <div className="c"><b>{f.sector?.name ?? 'Sector flight'}</b><br />Scenic sector flight, one way</div>
                 </div>
               )}
-              <div><span className={`chip${f.seatsAvailable <= 5 ? ' low' : ''}`}>{f.seatsAvailable} seat{f.seatsAvailable === 1 ? '' : 's'} left</span></div>
+              <div><span className={`chip${f.seatsAvailable <= 5 ? ' low' : ''}`}>{f.seatsAvailable} seat{f.seatsAvailable === 1 ? '' : 's'} left</span>{f.fitsParty === false && <small className="short-note">Only {f.seatsAvailable} seat{f.seatsAvailable === 1 ? '' : 's'} remaining on this flight. Please <a href="/contact">contact us</a> or change the number of passengers.</small>}</div>
               <div className="price">
                 <b>{fmtMoney(f.estimatedTotal, f.currency)}</b>
                 <small>for {people} passenger{people === 1 ? '' : 's'}</small>

@@ -17,7 +17,7 @@ interface Booking {
   reschedules: { id: string; direction: string; fromFlightNumber: string; fromDepartureAt: string; toFlightNumber: string; toDepartureAt: string; note: string | null; doneBy: string | null; createdAt: string }[];
   payment: { total: string; paid: string; refunded: string; net: string; balance: string; status: string };
   payments: { id: string; receiptNumber: string; type: 'PAYMENT' | 'REFUND'; method: string; amount: string; reference: string | null; receivedAt: string; note: string | null; status: string; voidReason: string | null; recordedBy: string }[];
-  notifications: { id: string; template: string; subject: string; status: string; createdAt: string }[];
+  notifications: { id: string; template: string; subject: string; status: string; error?: string | null; createdAt: string }[];
   contactName: string; contactEmail: string; contactPhone: string; notes: string | null;
   ticketFiles: { id: string; filename: string; size: number; uploadedByName: string; createdAt: string }[];
   segments: { id: string; direction: string; seats: number; seatState: string; adultFare: string; childFare: string; actualDepartureAt: string | null;
@@ -177,14 +177,14 @@ export default function BookingDetail() {
         : action === 'hold' ? { minutes }
         : action === 'ticket' ? { pnr, tickets: (b?.passengers ?? []).map((p) => ({ passengerId: p.id, ticketNumber: tickets[p.id] ?? '' })) }
         : COPY[action].reason ? { reason } : {};
-      let nb = await adminApi<Booking>(`/admin/bookings/${id}/${action}`, 'POST', body);
       if (action === 'ticket' && ticketPdfs.length) {
-        // The PDF is optional and uploaded after the ticket is recorded, so a bad file can never undo the ticket.
-        const failed: string[] = [];
-        for (const f of ticketPdfs) { try { await adminUpload(`/admin/bookings/${id}/ticket-files?filename=${encodeURIComponent(f.name)}`, f); } catch (x) { failed.push(`${f.name}: ${(x as Error).message}`); } }
-        nb = await adminApi<Booking>(`/admin/bookings/${id}`);
-        if (failed.length) setErr(`The ticket was recorded, but some PDFs were not saved. ${failed.join(' ')}`);
+        // Saved BEFORE the ticket is issued so the customer's ticket email can attach them. A bad file stops here, before anything is issued.
+        for (const f of ticketPdfs) {
+          try { await adminUpload(`/admin/bookings/${id}/ticket-files?filename=${encodeURIComponent(f.name)}`, f); } catch (x) { throw new Error(`${f.name}: ${(x as Error).message}`); }
+          setTicketPdfs((p) => p.filter((q) => q !== f)); // uploaded: a retry must not upload it twice
+        }
       }
+      const nb = await adminApi<Booking>(`/admin/bookings/${id}/${action}`, 'POST', body);
       setB(nb);
       setAction(null); setReason(''); setPnr(''); setTickets({}); setTicketPdfs([]);
     } catch (e) { setErr((e as Error).message); setAction(null); load(); }
@@ -381,7 +381,7 @@ export default function BookingDetail() {
       <table>
         <thead><tr><th>When</th><th>Email</th><th>Delivery</th></tr></thead>
         <tbody>
-          {(b.notifications ?? []).map((n) => <tr key={n.id}><td>{fmtDateTime(n.createdAt)}</td><td>{n.subject}</td><td>{n.status === 'NOT_CONFIGURED' ? 'NOT SENT (email server not set up)' : n.status}</td></tr>)}
+          {(b.notifications ?? []).map((n) => <tr key={n.id}><td>{fmtDateTime(n.createdAt)}</td><td>{n.subject}</td><td>{n.status === 'NOT_CONFIGURED' ? 'NOT SENT (email server not set up)' : n.status}{n.status === 'FAILED' && n.error ? <div className="muted sm">{n.error}</div> : null}</td></tr>)}
           {(b.notifications ?? []).length === 0 && <tr><td colSpan={3} className="muted">None yet.</td></tr>}
         </tbody>
       </table>

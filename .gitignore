@@ -9,3 +9,4 @@ coverage/
 backups/
 secrets/
 .local/
+/docs

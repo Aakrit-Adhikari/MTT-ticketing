@@ -104,7 +104,7 @@
 .price b { font-size: 1.2rem; display: block; color: var(--p-navy); }
 .price small { color: var(--p-muted); }
 @media (prefers-color-scheme: dark) { .price b { color: var(--p-text); } }
-.pick-bar { position: sticky; bottom: 0; z-index: 15; background: var(--p-navy); color: #fff; border-radius: 12px 12px 0 0; padding: 10px 16px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; box-shadow: 0 -4px 18px rgba(11,46,92,.3); margin-top: 16px; }
+.pick-bar { position: sticky; bottom: 0; z-index: 15; background: var(--p-sky); color: var(--p-text); border: 1px solid var(--p-line); border-bottom: 0; border-radius: 12px 12px 0 0; padding: 10px 16px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; box-shadow: 0 -4px 14px rgba(11,46,92,.12); margin-top: 16px; }
 .pick-bar .grow { flex: 1; min-width: 200px; font-size: .92rem; }
 
 @media (max-width: 900px) {
@@ -209,3 +209,7 @@
 .pub h1, .pub h2, .pub h3 { color: var(--p-text); }
 .pub label { color: var(--p-text); }
 .pub .muted { color: var(--p-muted); }
+
+.fcard.short { opacity: .75; cursor: default; }
+.fcard.short:hover { box-shadow: none; border-color: var(--p-line); }
+.short-note { display: block; max-width: 230px; margin-top: 6px; color: var(--p-warn); font-size: .8rem; line-height: 1.3; }

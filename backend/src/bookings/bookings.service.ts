@@ -9,7 +9,7 @@ import { FieldCryptoService } from '../common/crypto/field-crypto.service';
 import { PrismaService, Tx } from '../database/prisma.service';
 import { FlightsRepository } from '../flights/flights.repository';
 import { InventoryRepository, availableSeats } from '../inventory/inventory.repository';
-import { NotificationsService } from '../notifications/notifications.module';
+import { NotificationsService, OutgoingEmail } from '../notifications/notifications.module';
 import { bookingApproved, bookingClosed, inquiryReceived, ticketIssued } from '../notifications/templates';
 import { nepalDayStart } from '../flights/flights.service';
 import { money, summarize, summaryView } from '../payments/payments.util';
@@ -227,6 +227,9 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
       rescheduled: b.rescheduledCount > 0,
       payment: b.confirmedAt ? summarize(b).status : null, // status only; amounts are never shown on the public site
       requests: (await this.prisma.changeRequest.findMany({ where: { bookingId: b.id }, orderBy: { createdAt: 'desc' }, select: { type: true, status: true, createdAt: true } })),
+      ticketFiles: b.status === 'TICKETED'
+        ? await this.prisma.ticketFile.findMany({ where: { bookingId: b.id }, orderBy: { createdAt: 'asc' }, select: { id: true, filename: true, size: true } })
+        : [],
       segments: b.segments.map((s) => ({
         direction: s.direction,
         airline: s.flight.airline,
@@ -244,6 +247,13 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
         ticketNumber: b.status === 'TICKETED' ? p.ticketNumber : null,
       })),
     };
+  }
+
+  /** The customer downloads their own airline ticket PDF: reference + email must match, and the booking must be ticketed. */
+  async publicTicketFile(reference: string, email: string, fileId: string) {
+    const b = await this.repo.findByReference(normalizeReference(reference));
+    if (!b || b.contactEmail !== email.trim().toLowerCase() || b.status !== 'TICKETED') throw new NotFoundException('No ticket found for these details');
+    return this.ticketFile(b.id, fileId);
   }
 
   // ───────────────────────── admin: read ─────────────────────────
@@ -541,9 +551,19 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
       : b.status === 'CONFIRMED' ? bookingApproved(b, site)
       : b.status === 'CANCELLED' || b.status === 'REJECTED' ? bookingClosed(b, b.status, site)
       : inquiryReceived(b, site);
-    await this.mail.send(mail);
+    await this.mail.send(b.status === 'TICKETED' ? await this.withTicketPdfs(mail, id) : mail);
     await this.audit.record({ actorId: actor.id, action: 'booking.resend_email', entityType: 'Booking', entityId: id, detail: { template: mail.template } });
     return { sent: true, to: b.contactEmail };
+  }
+
+  /** Sidebar red dots: website inquiries still New, and customer requests still open, that arrived after the given times. */
+  async badges(inquiriesSince?: string, requestsSince?: string) {
+    const when = (v?: string) => { const d = v ? new Date(v) : new Date(); return Number.isNaN(d.getTime()) ? new Date() : d; };
+    const [inquiries, requests] = await Promise.all([
+      this.prisma.booking.count({ where: { source: 'WEBSITE', status: 'INQUIRY', createdAt: { gt: when(inquiriesSince) } } }),
+      this.prisma.changeRequest.count({ where: { status: 'OPEN', createdAt: { gt: when(requestsSince) } } }),
+    ]);
+    return { inquiries, requests };
   }
 
   /** Operational counts for the dashboard. */
@@ -566,7 +586,7 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
     const notifications = await this.prisma.notification.findMany({
       where: { bookingId: id },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, template: true, subject: true, status: true, createdAt: true },
+      select: { id: true, template: true, subject: true, status: true, error: true, createdAt: true },
     });
     const requests = await this.prisma.changeRequest.findMany({ where: { bookingId: id }, orderBy: { createdAt: 'desc' } });
     const reschedules = await this.prisma.reschedule.findMany({ where: { bookingId: id }, orderBy: { createdAt: 'desc' }, include: { doneBy: { select: { name: true } } } });
@@ -723,6 +743,13 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
     return this.get(actor, id);
   }
 
+  /** Attaches the airline's ticket PDFs (if any were uploaded) to the customer's ticket email. */
+  private async withTicketPdfs(mail: OutgoingEmail, bookingId: string): Promise<OutgoingEmail> {
+    const files = await this.prisma.ticketFile.findMany({ where: { bookingId }, orderBy: { createdAt: 'asc' } });
+    if (!files.length) return mail;
+    return { ...mail, attachments: files.map((f) => ({ filename: f.filename, content: Buffer.from(f.data), contentType: 'application/pdf' })) };
+  }
+
   /** Runs after the transaction commits; an email problem can never undo or fail the booking change. */
   private async emailStatusChange(id: string, status: BookingStatus): Promise<void> {
     try {
@@ -730,7 +757,7 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
       if (!b) return;
       const site = this.env.FRONTEND_ORIGIN;
       if (status === 'CONFIRMED') await this.mail.send(bookingApproved(b, site));
-      else if (status === 'TICKETED') await this.mail.send(ticketIssued(b, site));
+      else if (status === 'TICKETED') await this.mail.send(await this.withTicketPdfs(ticketIssued(b, site), id));
       else if (status === 'CANCELLED' || status === 'REJECTED') await this.mail.send(bookingClosed(b, status, site));
     } catch {
       this.logger.error('Could not queue customer email');

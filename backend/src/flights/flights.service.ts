@@ -182,7 +182,7 @@ export class FlightsService {
     const end = ymd ? new Date(start.getTime() + 86_400_000) : new Date(now.getTime() + BROWSE_DAYS * 86_400_000);
     const rows = await this.repo.searchDay(route, start, end, now, ymd ? undefined : BROWSE_MAX);
     return rows
-      .filter((f) => f.inventory && availableSeats(f.inventory) >= seats)
+      .filter((f) => f.inventory && availableSeats(f.inventory) >= 1) // too-few-seats flights are still listed, flagged fitsParty=false
       .map((f) => this.present(f, q));
   }
 
@@ -203,6 +203,7 @@ export class FlightsService {
       currency: f.currency,
       estimatedTotal: total.toFixed(2),
       seatsAvailable: avail,
+      fitsParty: avail >= q.adults + q.children,
     };
   }
 }

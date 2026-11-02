@@ -70,6 +70,10 @@ export class LookupDto {
   @IsEmail() @MaxLength(254) email!: string;
 }
 
+export class PublicTicketFileDto extends LookupDto {
+  @IsUUID() fileId!: string;
+}
+
 export class HoldDto {
   @IsOptional() @IsInt() @Min(5) @Max(1440) minutes?: number;
 }

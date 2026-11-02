@@ -11,6 +11,7 @@ export interface OutgoingEmail {
   template: string;
   subject: string;
   text: string;
+  attachments?: { filename: string; content: Buffer; contentType: string }[];
 }
 
 /**
@@ -63,7 +64,7 @@ export class NotificationsService {
       return;
     }
     try {
-      await this.transport.sendMail({ from: this.env.MAIL_FROM, to: mail.to, subject: mail.subject, text: mail.text });
+      await this.transport.sendMail({ from: this.env.MAIL_FROM, to: mail.to, subject: mail.subject, text: mail.text, attachments: mail.attachments });
       await finish('SENT');
     } catch (e) {
       this.logger.error(`Delivery failed for ${mail.template}`); // never log message content or SMTP credentials

@@ -52,6 +52,14 @@ describe('email delivery over SMTP', () => {
     expect(received.at(-1)?.body).toContain('MT-SMTP1-TEST1');
   });
 
+  it('attaches PDF files to the message', async () => {
+    await svc({}).send({ bookingId, to: 't@example.com', template: 'with_pdf', subject: 'Ticket', text: 'see attached', attachments: [{ filename: 'ticket.pdf', content: Buffer.from('%PDF-1.4 attach-me'), contentType: 'application/pdf' }] });
+    expect((await waitStatus('with_pdf')).status).toBe('SENT');
+    const body = received.at(-1)!.body;
+    expect(body).toContain('filename=ticket.pdf');
+    expect(body).toContain('application/pdf');
+  });
+
   it('records FAILED (without leaking credentials) when the server rejects the login', async () => {
     await svc({ SMTP_PASSWORD: 'wrong-password' }).send({ bookingId, to: 't@example.com', template: 'bad_login', subject: 'x', text: 'x' });
     const n = await waitStatus('bad_login');
