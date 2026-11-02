@@ -123,18 +123,3 @@ docker compose logs --since 1h backend frontend proxy
 The backend logs no request bodies, tokens or passwords. Do **not** run `docker compose config` or `docker inspect` into
 shared channels: they print resolved environment values.
 
-**10. Backup and restore:** see [docs/OPERATIONS.md](docs/OPERATIONS.md). Test a restore before relying on backups.
-
-### Go-live checklist
-- [ ] HTTPS certificate issued (Caddy logs show success) and `FRONTEND_ORIGIN` is the `https://` URL.
-- [ ] `.env` is `chmod 600`, not in git, and secrets are stored in a password manager.
-- [ ] `FIELD_ENCRYPTION_KEY` backed up separately from database backups.
-- [ ] `docker compose ps` shows no published port for `db` or `backend` (only proxy 80/443).
-- [ ] A backup was taken **and restored successfully** on a scratch database.
-- [ ] Policies and Contact pages edited with the agency's real content.
-- [ ] Host firewall allows only 22 (restricted), 80, 443; OS and Docker patched.
-
-## Remaining work (next phases, in order)
-1. Payments & receipts (manual, partial payments, duplicate prevention) and PNR/ticket recording (CONFIRMED → TICKETED).
-2. Cancellation/refund policies and refunds; rescheduling; customer cancellation requests.
-3. Customers, notifications (email), reports/CSV, system settings, sectors/routes.
